@@ -6,21 +6,23 @@
     <title>Maze Game</title>
     <style>
         body {
-            margin: 0;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
+            justify-content: center;
             min-height: 100vh;
+            margin: 0;
             background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
         }
         canvas {
             border: 2px solid #333;
-            background-color: #fff;
+            margin: 20px;
         }
     </style>
 </head>
 <body>
-    <canvas id="mazeCanvas" width="400" height="400"></canvas>
+    <canvas id="mazeCanvas"></canvas>
     <script src="game.js"></script>
 </body>
 </html> 
