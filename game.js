@@ -3,7 +3,7 @@ const ctx = canvas.getContext('2d');
 
 // Game constants
 const CELL_SIZE = 25;
-const BASE_GRID_SIZE = 20; // Increased base size for early levels
+const BASE_GRID_SIZE = 20;
 const PLAYER_SIZE = 16;
 
 // Game state
@@ -16,17 +16,114 @@ let timeStarted;
 let bestTimes = {};
 let isGeneratingMaze = false;
 let isAnimatingWin = false;
+let gameStarted = false;
+let gameDifficulty = null; // 'easy' or 'hard'
 
-// Get current grid size based on level
-function getCurrentGridSize() {
-    // Early levels now start bigger
-    if (currentLevel <= 5) {
-        return BASE_GRID_SIZE + Math.floor(currentLevel * 0.8);
+// Show welcome screen
+function showWelcomeScreen() {
+    const GRID_SIZE = BASE_GRID_SIZE;
+    canvas.width = GRID_SIZE * CELL_SIZE;
+    canvas.height = GRID_SIZE * CELL_SIZE;
+    
+    // Clear canvas with white background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw welcome text
+    ctx.fillStyle = '#333';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    const welcomeText = 'Welcome to Maze!';
+    ctx.fillText(welcomeText, canvas.width/2, canvas.height/2 - 50);
+    
+    // Create difficulty buttons if they don't exist
+    if (!document.getElementById('difficultyButtons')) {
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.id = 'difficultyButtons';
+        buttonsDiv.style.textAlign = 'center';
+        buttonsDiv.style.marginTop = '20px';
+        buttonsDiv.style.display = 'flex';
+        buttonsDiv.style.gap = '20px';
+        buttonsDiv.style.justifyContent = 'center';
+        
+        const easyButton = document.createElement('button');
+        easyButton.textContent = 'Easy';
+        easyButton.style.padding = '12px 24px';
+        easyButton.style.fontSize = '18px';
+        easyButton.style.cursor = 'pointer';
+        easyButton.style.backgroundColor = '#4CAF50';
+        easyButton.style.color = 'white';
+        easyButton.style.border = 'none';
+        easyButton.style.borderRadius = '5px';
+        
+        const hardButton = document.createElement('button');
+        hardButton.textContent = 'Hard';
+        hardButton.style.padding = '12px 24px';
+        hardButton.style.fontSize = '18px';
+        hardButton.style.cursor = 'pointer';
+        hardButton.style.backgroundColor = '#f44336';
+        hardButton.style.color = 'white';
+        hardButton.style.border = 'none';
+        hardButton.style.borderRadius = '5px';
+        
+        easyButton.onclick = () => startGame('easy');
+        hardButton.onclick = () => startGame('hard');
+        
+        buttonsDiv.appendChild(easyButton);
+        buttonsDiv.appendChild(hardButton);
+        canvas.parentElement.insertBefore(buttonsDiv, canvas.nextSibling);
+        
+        // Hide game controls initially
+        const controlsDiv = document.getElementById('gameControls');
+        if (controlsDiv) {
+            controlsDiv.style.display = 'none';
+        }
     }
-    return BASE_GRID_SIZE + Math.floor(currentLevel * 0.5);
 }
 
-// Generate a maze using recursive backtracking with enhanced complexity for early levels
+function startGame(difficulty) {
+    gameStarted = true;
+    gameDifficulty = difficulty;
+    
+    // Hide difficulty buttons
+    const buttonsDiv = document.getElementById('difficultyButtons');
+    if (buttonsDiv) {
+        buttonsDiv.style.display = 'none';
+    }
+    
+    // Add game controls if they don't exist
+    if (!document.getElementById('gameControls')) {
+        addControls();
+    }
+    
+    // Show game controls
+    const controlsDiv = document.getElementById('gameControls');
+    if (controlsDiv) {
+        controlsDiv.style.display = 'flex';
+    }
+    
+    // Start the game
+    currentLevel = 1;
+    generateMaze();
+    drawMaze();
+}
+
+// Get current grid size based on level and difficulty
+function getCurrentGridSize() {
+    if (gameDifficulty === 'easy') {
+        // Smaller grids for easy mode
+        const baseSize = 15;
+        return baseSize + Math.floor(currentLevel * 0.3);
+    } else {
+        // Hard mode with controlled growth
+        const baseSize = 20;
+        const maxSize = 35; // Cap the maximum size
+        const growthFactor = Math.min(currentLevel * 0.7, 15); // Slower growth that caps at level ~21
+        return Math.min(baseSize + Math.floor(growthFactor), maxSize);
+    }
+}
+
+// Generate a maze using recursive backtracking with difficulty-based complexity
 function generateMaze() {
     if (isGeneratingMaze) return;
     isGeneratingMaze = true;
@@ -35,38 +132,21 @@ function generateMaze() {
         const GRID_SIZE = getCurrentGridSize();
         player = { x: 1, y: 1 };
         
-        // For early levels, randomize exit position
-        if (currentLevel <= 5) {
+        // Set exit position
+        if (gameDifficulty === 'easy' || currentLevel <= 5) {
+            exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
+        } else {
+            // For higher levels in hard mode, randomize exit on edges
             const side = Math.floor(Math.random() * 4);
             switch(side) {
-                case 0: // Top
-                    exit = { x: Math.floor(GRID_SIZE/2), y: 1 };
-                    break;
-                case 1: // Right
-                    exit = { x: GRID_SIZE - 2, y: Math.floor(GRID_SIZE/2) };
-                    break;
-                case 2: // Bottom
-                    exit = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE - 2 };
-                    break;
-                case 3: // Left
-                    exit = { x: 1, y: Math.floor(GRID_SIZE/2) };
-                    break;
+                case 0: exit = { x: GRID_SIZE - 2, y: 1 }; break;
+                case 1: exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 }; break;
+                case 2: exit = { x: 1, y: GRID_SIZE - 2 }; break;
+                case 3: exit = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE - 2 }; break;
             }
-        } else {
-            exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
         }
         
-        // Initialize maze with walls
-        maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
-        
-        // Create main path
         createSinglePath();
-        
-        // Add extra complexity for early levels
-        if (currentLevel <= 5) {
-            addEarlyLevelComplexity(GRID_SIZE);
-        }
-        
         timeStarted = Date.now();
     } finally {
         isGeneratingMaze = false;
@@ -75,25 +155,23 @@ function generateMaze() {
 
 function createSinglePath() {
     const GRID_SIZE = getCurrentGridSize();
+    maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
     const visited = new Set();
     const stack = [{x: 1, y: 1}];
     maze[1][1] = 0;
     
+    // Create initial paths using recursive backtracking
     while (stack.length > 0) {
         const current = stack[stack.length - 1];
         const {x, y} = current;
         const key = `${x},${y}`;
         visited.add(key);
         
-        // Get possible directions with weighted randomization for early levels
+        // Get possible directions
         const directions = [];
-        if (x < GRID_SIZE - 2) {
-            // Add right direction multiple times for early levels to create longer paths
-            const weight = currentLevel <= 5 ? 3 : 1;
-            for (let i = 0; i < weight; i++) {
-                directions.push({dx: 2, dy: 0});
-            }
-        }
+        
+        // Add all possible directions (2 blocks apart)
+        if (x < GRID_SIZE - 2) directions.push({dx: 2, dy: 0});
         if (y < GRID_SIZE - 2) directions.push({dx: 0, dy: 2});
         if (x > 2) directions.push({dx: -2, dy: 0});
         if (y > 2) directions.push({dx: 0, dy: -2});
@@ -102,8 +180,8 @@ function createSinglePath() {
         const validMoves = directions.filter(({dx, dy}) => {
             const newX = x + dx;
             const newY = y + dy;
-            return newX > 0 && newX < GRID_SIZE - 1 && 
-                   newY > 0 && newY < GRID_SIZE - 1 && 
+            return newX > 0 && newX < GRID_SIZE - 1 &&
+                   newY > 0 && newY < GRID_SIZE - 1 &&
                    !visited.has(`${newX},${newY}`);
         });
         
@@ -122,53 +200,82 @@ function createSinglePath() {
         }
     }
     
-    // Ensure path to exit
+    // Ensure path to exit exists
     const pathToExit = findPathToExit(GRID_SIZE);
     pathToExit.forEach(({x, y}) => {
         maze[y][x] = 0;
     });
-}
-
-function findPathToExit(GRID_SIZE) {
-    // Find path from current position to exit
-    const path = [];
-    let current = {x: player.x, y: player.y};
     
-    while (current.x !== exit.x || current.y !== exit.y) {
-        path.push(current);
-        
-        if (current.x < exit.x) current.x++;
-        else if (current.x > exit.x) current.x--;
-        
-        if (current.y < exit.y) current.y++;
-        else if (current.y > exit.y) current.y--;
+    // Add branching paths based on difficulty
+    addBranchingPaths(GRID_SIZE);
+    
+    // For hard mode, add complexity without blocking paths
+    if (gameDifficulty === 'hard') {
+        addHardModeComplexity(GRID_SIZE);
     }
-    path.push(exit);
-    
-    return path;
 }
 
-function addEarlyLevelComplexity(GRID_SIZE) {
-    // Add strategic walls to create longer paths
-    for (let i = 0; i < currentLevel * 3; i++) {
+function addBranchingPaths(GRID_SIZE) {
+    const numBranches = gameDifficulty === 'hard' ? 
+        Math.floor(currentLevel * 2) : 
+        Math.floor(currentLevel * 1.5);
+    
+    for (let i = 0; i < numBranches; i++) {
+        let startX, startY;
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        do {
+            startX = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+            startY = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+            attempts++;
+        } while (maze[startY][startX] !== 0 && attempts < maxAttempts);
+        
+        if (attempts >= maxAttempts) continue;
+        
+        const directions = [
+            {dx: 2, dy: 0}, {dx: -2, dy: 0},
+            {dx: 0, dy: 2}, {dx: 0, dy: -2}
+        ];
+        
+        for (const {dx, dy} of directions) {
+            const newX = startX + dx;
+            const newY = startY + dy;
+            
+            if (newX > 1 && newX < GRID_SIZE - 2 &&
+                newY > 1 && newY < GRID_SIZE - 2 &&
+                maze[newY][newX] === 1) {
+                maze[startY + dy/2][startX + dx/2] = 0;
+                maze[newY][newX] = 0;
+            }
+        }
+    }
+}
+
+function addHardModeComplexity(GRID_SIZE) {
+    const numWalls = Math.min(
+        Math.floor(currentLevel * 3), 
+        Math.floor(GRID_SIZE * GRID_SIZE * 0.2)
+    );
+    
+    for (let i = 0; i < numWalls; i++) {
         const x = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
         const y = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
         
-        // Only add wall if it doesn't block the main path
-        if (maze[y][x] === 0 && !isPathBlocked(x, y, GRID_SIZE)) {
+        if (maze[y][x] === 0 && !wouldBlockAccess(x, y, GRID_SIZE)) {
             maze[y][x] = 1;
         }
     }
 }
 
-function isPathBlocked(wallX, wallY, GRID_SIZE) {
+function wouldBlockAccess(wallX, wallY, GRID_SIZE) {
     // Temporarily add wall
     const originalValue = maze[wallY][wallX];
     maze[wallY][wallX] = 1;
     
-    // Check if path exists
+    // Check if path exists from start to exit
     const visited = new Set();
-    const stack = [{x: player.x, y: player.y}];
+    const stack = [{x: 1, y: 1}];
     let foundExit = false;
     
     while (stack.length > 0 && !foundExit) {
@@ -183,7 +290,6 @@ function isPathBlocked(wallX, wallY, GRID_SIZE) {
         if (!visited.has(key)) {
             visited.add(key);
             
-            // Check all adjacent cells
             const directions = [
                 {dx: 1, dy: 0}, {dx: -1, dy: 0},
                 {dx: 0, dy: 1}, {dx: 0, dy: -1}
@@ -208,6 +314,25 @@ function isPathBlocked(wallX, wallY, GRID_SIZE) {
     return !foundExit;
 }
 
+function findPathToExit(GRID_SIZE) {
+    // Find path from current position to exit
+    const path = [];
+    let current = {x: player.x, y: player.y};
+    
+    while (current.x !== exit.x || current.y !== exit.y) {
+        path.push(current);
+        
+        if (current.x < exit.x) current.x++;
+        else if (current.x > exit.x) current.x--;
+        
+        if (current.y < exit.y) current.y++;
+        else if (current.y > exit.y) current.y--;
+    }
+    path.push(exit);
+    
+    return path;
+}
+
 // Win animation
 function playWinAnimation() {
     if (isAnimatingWin) return;
@@ -224,9 +349,7 @@ function playWinAnimation() {
             return;
         }
         
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw maze
+        // Draw the maze
         drawMazeBase();
         
         // Draw expanding circle at exit
@@ -239,7 +362,7 @@ function playWinAnimation() {
             0,
             Math.PI * 2
         );
-        ctx.fillStyle = `rgba(76, 175, 80, ${1 - frame/totalFrames})`;
+        ctx.fillStyle = `rgba(255, 0, 0, ${1 - frame/totalFrames})`;
         ctx.fill();
         
         frame++;
@@ -252,22 +375,26 @@ function playWinAnimation() {
 function drawMazeBase() {
     const GRID_SIZE = getCurrentGridSize();
     
+    // Clear canvas with white background
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
     // Draw walls
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
             if (maze[y][x] === 1) {
-                ctx.fillStyle = '#333';
+                ctx.fillStyle = '#FFD700'; // Yellow walls
                 ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
             }
         }
     }
     
     // Draw exit
-    ctx.fillStyle = '#4CAF50';
+    ctx.fillStyle = '#FF0000'; // Red exit
     ctx.fillRect(exit.x * CELL_SIZE, exit.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     
     // Draw player
-    ctx.fillStyle = '#2196F3';
+    ctx.fillStyle = '#FFA500'; // Orange player
     ctx.fillRect(
         player.x * CELL_SIZE + (CELL_SIZE - PLAYER_SIZE) / 2,
         player.y * CELL_SIZE + (CELL_SIZE - PLAYER_SIZE) / 2,
@@ -277,7 +404,7 @@ function drawMazeBase() {
     
     // Draw level info
     ctx.fillStyle = '#000';
-    ctx.font = '20px Arial';
+    ctx.font = 'bold 20px Arial';
     ctx.fillText(`Level ${currentLevel}`, 10, GRID_SIZE * CELL_SIZE - 10);
     
     // Draw timer
@@ -302,18 +429,41 @@ function proceedToNextLevel() {
         const prevLevel = currentLevel;
         currentLevel++;
         alert(`Level ${prevLevel} completed in ${timeElapsed} seconds!\nBest time: ${bestTimes[prevLevel]} seconds\nMoving to level ${currentLevel}`);
+        
+        player = { x: 1, y: 1 };
+        generateMaze();
+        drawMaze();
+        
+        const levelSelect = document.querySelector('select');
+        if (levelSelect) {
+            levelSelect.value = currentLevel;
+        }
     } else {
         alert('Congratulations! You\'ve completed all levels!');
-        currentLevel = 1;
+        returnToMainMenu();
+    }
+}
+
+function returnToMainMenu() {
+    // Reset game state
+    gameStarted = false;
+    gameDifficulty = null;
+    currentLevel = 1;
+    player = { x: 1, y: 1 };
+    
+    // Show welcome screen
+    showWelcomeScreen();
+    
+    // Show difficulty buttons
+    const buttonsDiv = document.getElementById('difficultyButtons');
+    if (buttonsDiv) {
+        buttonsDiv.style.display = 'flex';
     }
     
-    player = { x: 1, y: 1 };
-    generateMaze();
-    drawMaze();
-    
-    const levelSelect = document.querySelector('select');
-    if (levelSelect) {
-        levelSelect.value = currentLevel;
+    // Hide game controls
+    const controlsDiv = document.getElementById('gameControls');
+    if (controlsDiv) {
+        controlsDiv.style.display = 'none';
     }
 }
 
@@ -360,27 +510,52 @@ function handleKeyPress(e) {
 // Add UI controls
 function addControls() {
     const controlsDiv = document.createElement('div');
+    controlsDiv.id = 'gameControls';
     controlsDiv.style.marginTop = '10px';
     controlsDiv.style.display = 'flex';
     controlsDiv.style.gap = '10px';
     controlsDiv.style.justifyContent = 'center';
+    
+    // Back to Main button
+    const backButton = document.createElement('button');
+    backButton.textContent = 'Back to Main';
+    backButton.style.padding = '8px 16px';
+    backButton.style.fontSize = '16px';
+    backButton.style.backgroundColor = '#607D8B';
+    backButton.style.color = 'white';
+    backButton.style.border = 'none';
+    backButton.style.borderRadius = '5px';
+    backButton.style.cursor = 'pointer';
+    backButton.onclick = () => {
+        if (isGeneratingMaze) return;
+        if (confirm('Are you sure you want to return to the main menu? Your progress will not be saved.')) {
+            returnToMainMenu();
+        }
+    };
     
     // New Game button
     const newGameButton = document.createElement('button');
     newGameButton.textContent = 'New Game';
     newGameButton.style.padding = '8px 16px';
     newGameButton.style.fontSize = '16px';
+    newGameButton.style.backgroundColor = '#2196F3';
+    newGameButton.style.color = 'white';
+    newGameButton.style.border = 'none';
+    newGameButton.style.borderRadius = '5px';
+    newGameButton.style.cursor = 'pointer';
     newGameButton.onclick = () => {
         if (isGeneratingMaze) return;
-        currentLevel = 1;
-        player = { x: 1, y: 1 };
-        generateMaze();
-        drawMaze();
-        
-        // Update level selector
-        const levelSelect = document.querySelector('select');
-        if (levelSelect) {
-            levelSelect.value = currentLevel;
+        if (confirm('Are you sure you want to start a new game? Your progress will not be saved.')) {
+            currentLevel = 1;
+            player = { x: 1, y: 1 };
+            generateMaze();
+            drawMaze();
+            
+            // Update level selector
+            const levelSelect = document.querySelector('select');
+            if (levelSelect) {
+                levelSelect.value = currentLevel;
+            }
         }
     };
     
@@ -403,13 +578,17 @@ function addControls() {
         drawMaze();
     };
     
+    controlsDiv.appendChild(backButton);
     controlsDiv.appendChild(newGameButton);
     controlsDiv.appendChild(levelSelect);
     canvas.parentElement.appendChild(controlsDiv);
 }
 
 // Initialize the game
-generateMaze();
-drawMaze();
-addControls();
-document.addEventListener('keydown', handleKeyPress); 
+showWelcomeScreen();
+
+document.addEventListener('keydown', (e) => {
+    if (gameStarted) {
+        handleKeyPress(e);
+    }
+}); 
