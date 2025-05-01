@@ -111,14 +111,14 @@ function startGame(difficulty) {
 // Get current grid size based on level and difficulty
 function getCurrentGridSize() {
     if (gameDifficulty === 'easy') {
-        // Smaller grids for easy mode
-        const baseSize = 15;
-        return baseSize + Math.floor(currentLevel * 0.3);
+        // Increased base size and growth rate for easy mode
+        const baseSize = 18;
+        return baseSize + Math.floor(currentLevel * 0.5);
     } else {
-        // Hard mode with controlled growth
+        // Hard mode remains the same
         const baseSize = 20;
-        const maxSize = 35; // Cap the maximum size
-        const growthFactor = Math.min(currentLevel * 0.7, 15); // Slower growth that caps at level ~21
+        const maxSize = 35;
+        const growthFactor = Math.min(currentLevel * 0.7, 15);
         return Math.min(baseSize + Math.floor(growthFactor), maxSize);
     }
 }
@@ -132,21 +132,36 @@ function generateMaze() {
         const GRID_SIZE = getCurrentGridSize();
         player = { x: 1, y: 1 };
         
-        // Set exit position
-        if (gameDifficulty === 'easy' || currentLevel <= 5) {
-            exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
-        } else {
-            // For higher levels in hard mode, randomize exit on edges
-            const side = Math.floor(Math.random() * 4);
+        // Randomize exit position in easy mode for higher levels
+        if (gameDifficulty === 'easy' && currentLevel > 8) {
+            const side = Math.floor(Math.random() * 2); // Only use two sides in easy mode
             switch(side) {
-                case 0: exit = { x: GRID_SIZE - 2, y: 1 }; break;
-                case 1: exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 }; break;
-                case 2: exit = { x: 1, y: GRID_SIZE - 2 }; break;
-                case 3: exit = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE - 2 }; break;
+                case 0: exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 }; break;
+                case 1: exit = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE - 2 }; break;
             }
+        } else {
+            exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
         }
         
         createSinglePath();
+        
+        // Add some walls in easy mode (but fewer than hard mode)
+        if (gameDifficulty === 'easy' && currentLevel > 5) {
+            const numWalls = Math.min(
+                Math.floor(currentLevel * 1.5),
+                Math.floor(GRID_SIZE * GRID_SIZE * 0.1)
+            );
+            
+            for (let i = 0; i < numWalls; i++) {
+                const x = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+                const y = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+                
+                if (maze[y][x] === 0 && !wouldBlockAccess(x, y, GRID_SIZE)) {
+                    maze[y][x] = 1;
+                }
+            }
+        }
+        
         timeStarted = Date.now();
     } finally {
         isGeneratingMaze = false;
@@ -218,7 +233,7 @@ function createSinglePath() {
 function addBranchingPaths(GRID_SIZE) {
     const numBranches = gameDifficulty === 'hard' ? 
         Math.floor(currentLevel * 2) : 
-        Math.floor(currentLevel * 1.5);
+        Math.floor(currentLevel * 1.8); // Increased branching for easy mode
     
     for (let i = 0; i < numBranches; i++) {
         let startX, startY;
@@ -238,6 +253,7 @@ function addBranchingPaths(GRID_SIZE) {
             {dx: 0, dy: 2}, {dx: 0, dy: -2}
         ];
         
+        // Add more branching paths in easy mode
         for (const {dx, dy} of directions) {
             const newX = startX + dx;
             const newY = startY + dy;
@@ -247,6 +263,18 @@ function addBranchingPaths(GRID_SIZE) {
                 maze[newY][newX] === 1) {
                 maze[startY + dy/2][startX + dx/2] = 0;
                 maze[newY][newX] = 0;
+                
+                // Add extra branches in easy mode (but less than hard mode)
+                if (gameDifficulty === 'easy' && Math.random() < 0.3) {
+                    const extraX = newX + dx;
+                    const extraY = newY + dy;
+                    if (extraX > 1 && extraX < GRID_SIZE - 2 &&
+                        extraY > 1 && extraY < GRID_SIZE - 2 &&
+                        maze[extraY][extraX] === 1) {
+                        maze[newY + dy/2][newX + dx/2] = 0;
+                        maze[extraY][extraX] = 0;
+                    }
+                }
             }
         }
     }
