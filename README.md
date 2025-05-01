@@ -1,6 +1,8 @@
 # Maze Game
 
-A simple yet challenging maze game built with HTML5 Canvas and JavaScript. Navigate through increasingly complex mazes while racing against time!
+A challenging maze game built with HTML5 Canvas and JavaScript. Navigate through increasingly complex mazes while racing against time!
+
+Play the game here: [Maze Game](https://matthewzang.github.io/Maze/)
 
 ## Features
 
@@ -24,17 +26,6 @@ A simple yet challenging maze game built with HTML5 Canvas and JavaScript. Navig
 - ←: Move Left
 - →: Move Right
 
-## Setup
-
-1. Clone the repository:
-```bash
-git clone https://github.com/YOUR_USERNAME/maze-game.git
-```
-
-2. Open `index.html` in your web browser
-
-Or visit the live demo at: [YOUR_GITHUB_PAGES_URL]
-
 ## Development
 
 The game is built using vanilla JavaScript and HTML5 Canvas. No external dependencies required!
@@ -46,4 +37,4 @@ The game is built using vanilla JavaScript and HTML5 Canvas. No external depende
 
 ## License
 
-MIT License - feel free to use and modify! 
+MIT License - feel free to use and modify!
