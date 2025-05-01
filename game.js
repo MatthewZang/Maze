@@ -2,9 +2,9 @@ const canvas = document.getElementById('mazeCanvas');
 const ctx = canvas.getContext('2d');
 
 // Game constants
-const CELL_SIZE = 30;
-const BASE_GRID_SIZE = 12;
-const PLAYER_SIZE = 20;
+const CELL_SIZE = 25;
+const BASE_GRID_SIZE = 20; // Increased base size for early levels
+const PLAYER_SIZE = 16;
 
 // Game state
 let currentLevel = 1;
@@ -19,10 +19,14 @@ let isAnimatingWin = false;
 
 // Get current grid size based on level
 function getCurrentGridSize() {
+    // Early levels now start bigger
+    if (currentLevel <= 5) {
+        return BASE_GRID_SIZE + Math.floor(currentLevel * 0.8);
+    }
     return BASE_GRID_SIZE + Math.floor(currentLevel * 0.5);
 }
 
-// Generate a maze using recursive backtracking
+// Generate a maze using recursive backtracking with enhanced complexity for early levels
 function generateMaze() {
     if (isGeneratingMaze) return;
     isGeneratingMaze = true;
@@ -30,13 +34,38 @@ function generateMaze() {
     try {
         const GRID_SIZE = getCurrentGridSize();
         player = { x: 1, y: 1 };
-        exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
+        
+        // For early levels, randomize exit position
+        if (currentLevel <= 5) {
+            const side = Math.floor(Math.random() * 4);
+            switch(side) {
+                case 0: // Top
+                    exit = { x: Math.floor(GRID_SIZE/2), y: 1 };
+                    break;
+                case 1: // Right
+                    exit = { x: GRID_SIZE - 2, y: Math.floor(GRID_SIZE/2) };
+                    break;
+                case 2: // Bottom
+                    exit = { x: Math.floor(GRID_SIZE/2), y: GRID_SIZE - 2 };
+                    break;
+                case 3: // Left
+                    exit = { x: 1, y: Math.floor(GRID_SIZE/2) };
+                    break;
+            }
+        } else {
+            exit = { x: GRID_SIZE - 2, y: GRID_SIZE - 2 };
+        }
         
         // Initialize maze with walls
         maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
         
-        // Create single path maze
+        // Create main path
         createSinglePath();
+        
+        // Add extra complexity for early levels
+        if (currentLevel <= 5) {
+            addEarlyLevelComplexity(GRID_SIZE);
+        }
         
         timeStarted = Date.now();
     } finally {
@@ -56,12 +85,18 @@ function createSinglePath() {
         const key = `${x},${y}`;
         visited.add(key);
         
-        // Get possible directions
+        // Get possible directions with weighted randomization for early levels
         const directions = [];
-        if (x < GRID_SIZE - 2) directions.push({dx: 2, dy: 0}); // Right
-        if (y < GRID_SIZE - 2) directions.push({dx: 0, dy: 2}); // Down
-        if (x > 2) directions.push({dx: -2, dy: 0}); // Left
-        if (y > 2) directions.push({dx: 0, dy: -2}); // Up
+        if (x < GRID_SIZE - 2) {
+            // Add right direction multiple times for early levels to create longer paths
+            const weight = currentLevel <= 5 ? 3 : 1;
+            for (let i = 0; i < weight; i++) {
+                directions.push({dx: 2, dy: 0});
+            }
+        }
+        if (y < GRID_SIZE - 2) directions.push({dx: 0, dy: 2});
+        if (x > 2) directions.push({dx: -2, dy: 0});
+        if (y > 2) directions.push({dx: 0, dy: -2});
         
         // Filter valid moves
         const validMoves = directions.filter(({dx, dy}) => {
@@ -88,8 +123,89 @@ function createSinglePath() {
     }
     
     // Ensure path to exit
-    maze[GRID_SIZE - 2][GRID_SIZE - 2] = 0;
-    maze[GRID_SIZE - 2][GRID_SIZE - 3] = 0;
+    const pathToExit = findPathToExit(GRID_SIZE);
+    pathToExit.forEach(({x, y}) => {
+        maze[y][x] = 0;
+    });
+}
+
+function findPathToExit(GRID_SIZE) {
+    // Find path from current position to exit
+    const path = [];
+    let current = {x: player.x, y: player.y};
+    
+    while (current.x !== exit.x || current.y !== exit.y) {
+        path.push(current);
+        
+        if (current.x < exit.x) current.x++;
+        else if (current.x > exit.x) current.x--;
+        
+        if (current.y < exit.y) current.y++;
+        else if (current.y > exit.y) current.y--;
+    }
+    path.push(exit);
+    
+    return path;
+}
+
+function addEarlyLevelComplexity(GRID_SIZE) {
+    // Add strategic walls to create longer paths
+    for (let i = 0; i < currentLevel * 3; i++) {
+        const x = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+        const y = 2 + Math.floor(Math.random() * (GRID_SIZE - 4));
+        
+        // Only add wall if it doesn't block the main path
+        if (maze[y][x] === 0 && !isPathBlocked(x, y, GRID_SIZE)) {
+            maze[y][x] = 1;
+        }
+    }
+}
+
+function isPathBlocked(wallX, wallY, GRID_SIZE) {
+    // Temporarily add wall
+    const originalValue = maze[wallY][wallX];
+    maze[wallY][wallX] = 1;
+    
+    // Check if path exists
+    const visited = new Set();
+    const stack = [{x: player.x, y: player.y}];
+    let foundExit = false;
+    
+    while (stack.length > 0 && !foundExit) {
+        const current = stack.pop();
+        const key = `${current.x},${current.y}`;
+        
+        if (current.x === exit.x && current.y === exit.y) {
+            foundExit = true;
+            break;
+        }
+        
+        if (!visited.has(key)) {
+            visited.add(key);
+            
+            // Check all adjacent cells
+            const directions = [
+                {dx: 1, dy: 0}, {dx: -1, dy: 0},
+                {dx: 0, dy: 1}, {dx: 0, dy: -1}
+            ];
+            
+            for (const {dx, dy} of directions) {
+                const newX = current.x + dx;
+                const newY = current.y + dy;
+                
+                if (newX >= 0 && newX < GRID_SIZE &&
+                    newY >= 0 && newY < GRID_SIZE &&
+                    maze[newY][newX] === 0) {
+                    stack.push({x: newX, y: newY});
+                }
+            }
+        }
+    }
+    
+    // Restore original value
+    maze[wallY][wallX] = originalValue;
+    
+    return !foundExit;
 }
 
 // Win animation
